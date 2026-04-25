@@ -193,6 +193,20 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .set-card .img-preview:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .set-card .img-preview.drag-over {
+    border-color: var(--accent);
+    border-style: solid;
+    background: var(--accent-soft);
   }
 
   .set-card .img-preview img {
@@ -206,6 +220,50 @@
     color: var(--ink-soft);
     text-align: center;
     padding: 4px;
+    line-height: 1.4;
+    pointer-events: none;
+  }
+
+  .set-card .img-preview .drop-hint {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(214, 59, 110, 0.85);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .set-card .img-preview.drag-over .drop-hint {
+    display: flex;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 100;
+    max-width: 90vw;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-8px);
   }
 
   .fields {
@@ -271,9 +329,9 @@
   }
 
   .preview-frame {
-    /* 1080x1920を縮小表示 (scale 0.2 → 216x384) */
-    --scale: 0.2;
-    width: calc(1080px * var(--scale));
+    /* 1920x1920を縮小表示 (scale 0.18 → 約345x345) */
+    --scale: 0.18;
+    width: calc(1920px * var(--scale));
     height: calc(1920px * var(--scale));
     background:
       repeating-conic-gradient(#dfdcd2 0% 25%, #ebe8de 0% 50%) 50% / 24px 24px;
@@ -296,7 +354,7 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 1080px;
+    width: 1920px;
     height: 1920px;
     transform: scale(var(--scale));
     transform-origin: top left;
@@ -362,11 +420,12 @@
 
     <div class="help">
       <strong>使い方:</strong><br>
-      1. セットを追加・編集する(画像パスは <code>images/xxx.webp</code> のように指定)<br>
-      2. 「data.json ダウンロード」でファイル保存<br>
-      3. ダウンロードした <code>data.json</code> をリポジトリにcommit/push<br>
-      4. 画像を追加した場合は <code>images/</code> フォルダにも追加してpush<br>
-      5. GitHub Pagesに反映後、TikTok Live Studioで <code>overlay.html</code> を読み込む
+      1. 「＋ セット追加」で新規セット追加、または「📂 JSON読み込み」で既存data.jsonを編集再開<br>
+      2. 各セットのサムネイル枠に画像ファイルを<strong>ドラッグ&ドロップ</strong>(またはクリックで選択)。同名ファイルがダウンロードされ、画像パスが自動入力される<br>
+      3. ギフト名・任意テキストを入力、必要に応じて↑↓ボタンで並び替え<br>
+      4. 「💾 data.json ダウンロード」でファイル保存<br>
+      5. ダウンロードした <code>data.json</code> をリポジトリのルートに、画像ファイルを <code>images/</code> フォルダに配置してcommit/push<br>
+      6. GitHub Pagesに反映後、TikTok Live Studioで <code>overlay.html</code> を読み込む(ブラウザソースサイズはお好みで調整)
     </div>
   </div>
 
@@ -378,7 +437,7 @@
         <iframe id="preview-iframe" src="about:blank"></iframe>
       </div>
     </div>
-    <div class="preview-meta">1080 × 1920 (1/5サイズ)</div>
+    <div class="preview-meta">1920 × 1920</div>
   </div>
 
 </div>
@@ -389,12 +448,15 @@
 
   // === 状態 ===
   var state = {
-    sets: []
+    sets: [],
+    // インデックスごとのBase64プレビュー(ドロップされた画像のメモリ内データ。JSONには書き出さない)
+    localPreviews: {}
   };
 
   var listEl = document.getElementById('sets-list');
   var iframe = document.getElementById('preview-iframe');
   var fileInput = document.getElementById('file-input');
+  var toastEl = null;
 
   var previewUpdateTimer = null;
 
@@ -416,20 +478,25 @@
 
     var html = state.sets.map(function (s, i) {
       var imgPath = s.image || '';
-      var imgPreview = imgPath
-        ? '<img src="' + escapeHtml(imgPath) + '" alt="" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';"><span class="placeholder" style="display:none;">画像が<br>見つかりません</span>'
-        : '<span class="placeholder">画像未設定</span>';
+      // ローカルでドロップされた画像のBase64がある場合はそちらを優先表示
+      var displaySrc = state.localPreviews[i] || imgPath;
+      var imgPreview = displaySrc
+        ? '<img src="' + escapeHtml(displaySrc) + '" alt="" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';"><span class="placeholder" style="display:none;">画像が<br>見つかりません</span>'
+        : '<span class="placeholder">画像をドロップ<br>またはパス入力</span>';
 
       return '' +
         '<div class="set-card" data-index="' + i + '">' +
           '<div class="img-cell">' +
             '<div class="index-badge">' + (i + 1) + '</div>' +
-            '<div class="img-preview">' + imgPreview + '</div>' +
+            '<div class="img-preview" data-drop="true" title="クリックまたは画像をドラッグ&ドロップ">' +
+              imgPreview +
+              '<div class="drop-hint">ドロップで追加</div>' +
+            '</div>' +
           '</div>' +
           '<div class="fields">' +
             '<div class="field">' +
               '<label>画像パス</label>' +
-              '<input type="text" data-field="image" value="' + escapeHtml(imgPath) + '" placeholder="images/example.webp">' +
+              '<input type="text" data-field="image" value="' + escapeHtml(imgPath) + '" placeholder="images/example.webp (またはサムネイルに画像をドロップ)">' +
             '</div>' +
             '<div class="field">' +
               '<label>ギフト名</label>' +
@@ -461,6 +528,14 @@
   function deleteSet(index) {
     if (!confirm('このセットを削除しますか?')) return;
     state.sets.splice(index, 1);
+    // localPreviews を index ベースで再構築(削除した index 以降を1つずつ前にずらす)
+    var newPreviews = {};
+    Object.keys(state.localPreviews).forEach(function (k) {
+      var i = parseInt(k, 10);
+      if (i < index) newPreviews[i] = state.localPreviews[i];
+      else if (i > index) newPreviews[i - 1] = state.localPreviews[i];
+    });
+    state.localPreviews = newPreviews;
     renderList();
   }
 
@@ -470,12 +545,23 @@
     var tmp = state.sets[index];
     state.sets[index] = state.sets[newIndex];
     state.sets[newIndex] = tmp;
+    // localPreviews も swap
+    var p1 = state.localPreviews[index];
+    var p2 = state.localPreviews[newIndex];
+    if (p1 !== undefined) state.localPreviews[newIndex] = p1; else delete state.localPreviews[newIndex];
+    if (p2 !== undefined) state.localPreviews[index] = p2; else delete state.localPreviews[index];
     renderList();
   }
 
   function updateField(index, field, value) {
     if (!state.sets[index]) return;
     state.sets[index][field] = value;
+
+    // 画像パスがマニュアル変更されたら、対応するlocalPreviewはクリア(本物のパスを優先)
+    if (field === 'image' && state.localPreviews[index]) {
+      delete state.localPreviews[index];
+    }
+
     schedulePreviewUpdate();
 
     // 画像パスが変わったときはサムネイルだけ更新
@@ -484,14 +570,91 @@
       if (card) {
         var preview = card.querySelector('.img-preview');
         if (preview) {
-          if (value) {
-            preview.innerHTML = '<img src="' + escapeHtml(value) + '" alt="" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';"><span class="placeholder" style="display:none;">画像が<br>見つかりません</span>';
+          var displaySrc = state.localPreviews[index] || value;
+          var hint = preview.querySelector('.drop-hint');
+          // drop-hint以外を再構築
+          preview.innerHTML = '';
+          if (displaySrc) {
+            var imgEl = document.createElement('img');
+            imgEl.src = displaySrc;
+            imgEl.alt = '';
+            var fallback = document.createElement('span');
+            fallback.className = 'placeholder';
+            fallback.style.display = 'none';
+            fallback.innerHTML = '画像が<br>見つかりません';
+            imgEl.onerror = function () {
+              imgEl.style.display = 'none';
+              fallback.style.display = 'flex';
+            };
+            preview.appendChild(imgEl);
+            preview.appendChild(fallback);
           } else {
-            preview.innerHTML = '<span class="placeholder">画像未設定</span>';
+            var ph = document.createElement('span');
+            ph.className = 'placeholder';
+            ph.innerHTML = '画像をドロップ<br>またはパス入力';
+            preview.appendChild(ph);
           }
+          var newHint = document.createElement('div');
+          newHint.className = 'drop-hint';
+          newHint.textContent = 'ドロップで追加';
+          preview.appendChild(newHint);
         }
       }
     }
+  }
+
+  // === Toast ===
+  function showToast(msg, durationMs) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'toast';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    if (showToast._timer) clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(function () {
+      toastEl.classList.remove('show');
+    }, durationMs || 3000);
+  }
+
+  // === 画像ドロップ処理 ===
+  function handleImageDrop(index, file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('画像ファイルをドロップしてください', 3000);
+      return;
+    }
+
+    var fileName = file.name;
+    var imagePath = 'images/' + fileName;
+
+    // FileReaderでBase64化(プレビュー用)
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var dataUrl = e.target.result;
+      state.localPreviews[index] = dataUrl;
+      // パスも自動入力
+      state.sets[index].image = imagePath;
+
+      // ファイルをユーザーのダウンロードフォルダに保存(リポジトリ配置用)
+      saveFileToDownload(file, fileName);
+
+      renderList();
+      showToast('「' + fileName + '」をダウンロードしました。リポジトリの images/ フォルダに配置してください', 5000);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function saveFileToDownload(file, fileName) {
+    var url = URL.createObjectURL(file);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
   // === イベント ===
@@ -519,6 +682,7 @@
             text: s.text || ''
           };
         });
+        state.localPreviews = {};
         renderList();
       } catch (err) {
         alert('JSONの読み込みに失敗しました: ' + err.message);
@@ -554,13 +718,68 @@
 
   listEl.addEventListener('click', function (e) {
     var btn = e.target.closest('button[data-action]');
-    if (!btn) return;
-    var card = btn.closest('.set-card');
+    if (btn) {
+      var card = btn.closest('.set-card');
+      var index = parseInt(card.dataset.index, 10);
+      var action = btn.dataset.action;
+      if (action === 'up') moveSet(index, -1);
+      else if (action === 'down') moveSet(index, +1);
+      else if (action === 'delete') deleteSet(index);
+      return;
+    }
+    // img-previewクリック → ファイル選択ダイアログ
+    var preview = e.target.closest('.img-preview[data-drop="true"]');
+    if (preview) {
+      var card = preview.closest('.set-card');
+      var index = parseInt(card.dataset.index, 10);
+      var picker = document.createElement('input');
+      picker.type = 'file';
+      picker.accept = 'image/*';
+      picker.onchange = function () {
+        var file = picker.files && picker.files[0];
+        if (file) handleImageDrop(index, file);
+      };
+      picker.click();
+    }
+  });
+
+  // === ドラッグ&ドロップ ===
+  listEl.addEventListener('dragover', function (e) {
+    var preview = e.target.closest('.img-preview[data-drop="true"]');
+    if (!preview) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    preview.classList.add('drag-over');
+  });
+
+  listEl.addEventListener('dragleave', function (e) {
+    var preview = e.target.closest('.img-preview[data-drop="true"]');
+    if (!preview) return;
+    // 子要素間の移動は無視するため、関係する要素から完全に出たときだけクラス除去
+    if (!preview.contains(e.relatedTarget)) {
+      preview.classList.remove('drag-over');
+    }
+  });
+
+  listEl.addEventListener('drop', function (e) {
+    var preview = e.target.closest('.img-preview[data-drop="true"]');
+    if (!preview) return;
+    e.preventDefault();
+    preview.classList.remove('drag-over');
+    var card = preview.closest('.set-card');
     var index = parseInt(card.dataset.index, 10);
-    var action = btn.dataset.action;
-    if (action === 'up') moveSet(index, -1);
-    else if (action === 'down') moveSet(index, +1);
-    else if (action === 'delete') deleteSet(index);
+    var file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) handleImageDrop(index, file);
+  });
+
+  // 画面全体でデフォルトのドロップ動作(ブラウザがファイルを開いてしまう)を無効化
+  window.addEventListener('dragover', function (e) {
+    if (e.target.closest('.img-preview[data-drop="true"]')) return;
+    e.preventDefault();
+  });
+  window.addEventListener('drop', function (e) {
+    if (e.target.closest('.img-preview[data-drop="true"]')) return;
+    e.preventDefault();
   });
 
   // === プレビュー ===
@@ -572,7 +791,16 @@
   }
 
   function buildPreviewHTML() {
-    var dataJson = JSON.stringify({ sets: state.sets });
+    // localPreviewsがあるセットは、画像パスを一時的にBase64データに置き換えてプレビュー表示
+    var previewSets = state.sets.map(function (s, i) {
+      var previewSrc = state.localPreviews[i];
+      return {
+        image: previewSrc || s.image || '',
+        name: s.name || '',
+        text: s.text || ''
+      };
+    });
+    var dataJson = JSON.stringify({ sets: previewSets });
     return '<!DOCTYPE html>\n' +
 '<html lang="ja">\n' +
 '<head>\n' +
@@ -580,16 +808,18 @@
 '<style>\n' +
 '@font-face{font-family:"Noto Sans JP Local";src:url("fonts/NotoSansJP-Black.ttf") format("truetype");font-weight:900;font-style:normal;font-display:block}\n' +
 '*{margin:0;padding:0;box-sizing:border-box}\n' +
-'html,body{width:1080px;height:1920px;background:transparent;overflow:hidden;font-family:"Noto Sans JP Local",sans-serif;font-weight:900}\n' +
-'#stage{position:relative;width:1080px;height:1920px}\n' +
-'.page{position:absolute;top:0;left:0;width:1080px;height:1920px;padding:60px;display:flex;flex-direction:column;gap:24px;opacity:0;transition:opacity .5s ease}\n' +
+'html,body{width:1920px;height:1920px;background:transparent;overflow:hidden;font-family:"Noto Sans JP Local",sans-serif;font-weight:900}\n' +
+'#stage{position:relative;width:1920px;height:1920px}\n' +
+'.page{position:absolute;top:0;left:0;width:1920px;height:1920px;padding:60px;display:flex;flex-direction:column;gap:14px;opacity:0;transition:opacity .5s ease}\n' +
 '.page.active{opacity:1}\n' +
 '.set{height:280px;display:flex;align-items:center;gap:32px;flex-shrink:0}\n' +
 '.set-image-wrap{width:240px;height:240px;flex-shrink:0;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 6px 10px rgba(0,0,0,.55));animation:rock 1s ease-in-out infinite alternate}\n' +
 '.set-image-wrap img{width:100%;height:100%;object-fit:contain;display:block}\n' +
 '@keyframes rock{from{transform:rotate(-10deg)}to{transform:rotate(10deg)}}\n' +
 '.set-text{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:12px;overflow:hidden}\n' +
-'.set-name,.set-desc{color:#fff;font-size:72px;line-height:1.15;font-weight:900;white-space:nowrap;overflow:hidden;-webkit-text-stroke:6px #000;paint-order:stroke fill;text-shadow:0 4px 8px rgba(0,0,0,.85),0 0 6px rgba(0,0,0,.6)}\n' +
+'.set-name,.set-desc{color:#fff;font-size:72px;line-height:1.15;font-weight:900;white-space:nowrap;overflow:hidden;-webkit-text-stroke:12px #000;paint-order:stroke fill;text-shadow:0 4px 8px rgba(0,0,0,.85),0 0 6px rgba(0,0,0,.6)}\n' +
+'.set.solo .set-name,.set.solo .set-desc{font-size:144px}\n' +
+'.set.solo .set-name:empty,.set.solo .set-desc:empty{display:none}\n' +
 '</style></head><body>\n' +
 '<div id="stage"></div>\n' +
 '<script>\n' +
@@ -600,12 +830,14 @@
 'var pageEls=[],currentPageIndex=0,rotateTimer=null;\n' +
 'function chunk(arr,size){var p=[];for(var i=0;i<arr.length;i+=size)p.push(arr.slice(i,i+size));return p}\n' +
 'function createSetEl(s){var el=document.createElement("div");el.className="set";\n' +
+'var nm=(s.name||"").trim(),tx=(s.text||"").trim();\n' +
+'if((nm&&!tx)||(!nm&&tx))el.classList.add("solo");\n' +
 'var iw=document.createElement("div");iw.className="set-image-wrap";\n' +
 'var img=document.createElement("img");img.src=s.image||"";img.onerror=function(){img.style.visibility="hidden"};iw.appendChild(img);\n' +
 'var tw=document.createElement("div");tw.className="set-text";\n' +
-'var nm=document.createElement("div");nm.className="set-name";nm.textContent=s.name||"";\n' +
-'var ds=document.createElement("div");ds.className="set-desc";ds.textContent=s.text||"";\n' +
-'tw.appendChild(nm);tw.appendChild(ds);el.appendChild(iw);el.appendChild(tw);return el}\n' +
+'var nme=document.createElement("div");nme.className="set-name";nme.textContent=nm;\n' +
+'var ds=document.createElement("div");ds.className="set-desc";ds.textContent=tx;\n' +
+'tw.appendChild(nme);tw.appendChild(ds);el.appendChild(iw);el.appendChild(tw);return el}\n' +
 'function render(){if(rotateTimer){clearTimeout(rotateTimer);rotateTimer=null}\n' +
 'stage.innerHTML="";pageEls=[];currentPageIndex=0;\n' +
 'if(!DATA.sets||!DATA.sets.length)return;\n' +

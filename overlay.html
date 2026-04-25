@@ -19,7 +19,7 @@
   }
 
   html, body {
-    width: 1080px;
+    width: 1920px;
     height: 1920px;
     background: transparent;
     overflow: hidden;
@@ -38,7 +38,7 @@
 
   #stage {
     position: relative;
-    width: 1080px;
+    width: 1920px;
     height: 1920px;
   }
 
@@ -46,12 +46,12 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 1080px;
+    width: 1920px;
     height: 1920px;
     padding: 60px 60px;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 14px;
     opacity: 0;
     transition: opacity 0.5s ease;
     pointer-events: none;
@@ -112,11 +112,21 @@
     overflow: hidden;
 
     /* 黒縁取り(stroke) + 落ち影(shadow)の二重 */
-    -webkit-text-stroke: 6px #000000;
+    -webkit-text-stroke: 12px #000000;
     paint-order: stroke fill;
     text-shadow:
       0 4px 8px rgba(0, 0, 0, 0.85),
       0 0 6px rgba(0, 0, 0, 0.6);
+  }
+
+  /* 片方だけ記入されている場合は2倍サイズ */
+  .set.solo .set-name,
+  .set.solo .set-desc {
+    font-size: 144px;
+  }
+  .set.solo .set-name:empty,
+  .set.solo .set-desc:empty {
+    display: none;
   }
 </style>
 </head>
@@ -172,6 +182,13 @@
     var setEl = document.createElement('div');
     setEl.className = 'set';
 
+    var name = (set.name || '').trim();
+    var text = (set.text || '').trim();
+    // どちらか片方だけ記入されている場合は solo クラスを付与
+    if ((name && !text) || (!name && text)) {
+      setEl.classList.add('solo');
+    }
+
     var imgWrap = document.createElement('div');
     imgWrap.className = 'set-image-wrap';
 
@@ -190,11 +207,11 @@
 
     var nameEl = document.createElement('div');
     nameEl.className = 'set-name';
-    nameEl.textContent = set.name || '';
+    nameEl.textContent = name;
 
     var descEl = document.createElement('div');
     descEl.className = 'set-desc';
-    descEl.textContent = set.text || '';
+    descEl.textContent = text;
 
     textWrap.appendChild(nameEl);
     textWrap.appendChild(descEl);
