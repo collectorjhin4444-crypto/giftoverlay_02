@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Gift Overlay</title>
+<style>
+  @font-face {
+    font-family: 'Noto Sans JP Local';
+    src: url('fonts/NotoSansJP-Black.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+    font-display: block;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    width: 1080px;
+    height: 1920px;
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Noto Sans JP Local', 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+  }
+
+  /* フォント読み込み完了まで非表示 */
+  body {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  body.ready {
+    opacity: 1;
+  }
+
+  #stage {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+  }
+
+  .page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1080px;
+    height: 1920px;
+    padding: 60px 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+  }
+
+  .page.active {
+    opacity: 1;
+  }
+
+  .set {
+    height: 280px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    flex-shrink: 0;
+  }
+
+  .set-image-wrap {
+    width: 240px;
+    height: 240px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+    animation: rock 1s ease-in-out infinite alternate;
+  }
+
+  .set-image-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  @keyframes rock {
+    from { transform: rotate(-10deg); }
+    to   { transform: rotate(10deg); }
+  }
+
+  .set-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+    overflow: hidden;
+  }
+
+  .set-name,
+  .set-desc {
+    color: #ffffff;
+    font-size: 72px;
+    line-height: 1.15;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+
+    /* 黒縁取り(stroke) + 落ち影(shadow)の二重 */
+    -webkit-text-stroke: 6px #000000;
+    paint-order: stroke fill;
+    text-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.85),
+      0 0 6px rgba(0, 0, 0, 0.6);
+  }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var SETS_PER_PAGE = 6;
+  var PAGE_DURATION_MS = 2000;     // 各ページ表示時間
+  var DISSOLVE_MS = 500;           // クロスフェード時間
+  var POLL_INTERVAL_MS = 30000;    // data.json再取得間隔(変更があればリロード)
+
+  var stage = document.getElementById('stage');
+  var pageEls = [];
+  var currentPageIndex = 0;
+  var rotateTimer = null;
+  var lastDataString = null;
+
+  // フォント読み込み完了でbodyを表示
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      document.body.classList.add('ready');
+    });
+  } else {
+    // フォールバック
+    window.addEventListener('load', function () {
+      document.body.classList.add('ready');
+    });
+  }
+
+  function fetchData() {
+    // キャッシュバスティングしてdata.jsonを取得
+    var url = 'data.json?t=' + Date.now();
+    return fetch(url, { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      });
+  }
+
+  function chunk(arr, size) {
+    var pages = [];
+    for (var i = 0; i < arr.length; i += size) {
+      pages.push(arr.slice(i, i + size));
+    }
+    return pages;
+  }
+
+  function createSetEl(set) {
+    var setEl = document.createElement('div');
+    setEl.className = 'set';
+
+    var imgWrap = document.createElement('div');
+    imgWrap.className = 'set-image-wrap';
+
+    var img = document.createElement('img');
+    img.src = set.image || '';
+    img.alt = '';
+    img.onerror = function () {
+      // 画像読み込み失敗時はコンソールにログ、画面はクリーンに
+      console.error('[overlay] Image load failed:', set.image);
+      img.style.visibility = 'hidden';
+    };
+    imgWrap.appendChild(img);
+
+    var textWrap = document.createElement('div');
+    textWrap.className = 'set-text';
+
+    var nameEl = document.createElement('div');
+    nameEl.className = 'set-name';
+    nameEl.textContent = set.name || '';
+
+    var descEl = document.createElement('div');
+    descEl.className = 'set-desc';
+    descEl.textContent = set.text || '';
+
+    textWrap.appendChild(nameEl);
+    textWrap.appendChild(descEl);
+
+    setEl.appendChild(imgWrap);
+    setEl.appendChild(textWrap);
+
+    return setEl;
+  }
+
+  function render(data) {
+    // 既存のタイマーを停止
+    if (rotateTimer !== null) {
+      clearTimeout(rotateTimer);
+      rotateTimer = null;
+    }
+
+    // ステージをクリア
+    stage.innerHTML = '';
+    pageEls = [];
+    currentPageIndex = 0;
+
+    if (!data || !Array.isArray(data.sets) || data.sets.length === 0) {
+      // セット0個 → 何も表示しない
+      return;
+    }
+
+    var pages = chunk(data.sets, SETS_PER_PAGE);
+
+    // 各ページのDOMを構築
+    pages.forEach(function (pageSets, idx) {
+      var pageEl = document.createElement('div');
+      pageEl.className = 'page';
+      pageSets.forEach(function (s) {
+        pageEl.appendChild(createSetEl(s));
+      });
+      stage.appendChild(pageEl);
+      pageEls.push(pageEl);
+    });
+
+    // 1ページ目を表示
+    pageEls[0].classList.add('active');
+
+    // ページが2枚以上ある場合のみローテーション開始
+    if (pageEls.length >= 2) {
+      scheduleNext();
+    }
+  }
+
+  function scheduleNext() {
+    rotateTimer = setTimeout(function () {
+      var nextIndex = (currentPageIndex + 1) % pageEls.length;
+      pageEls[currentPageIndex].classList.remove('active');
+      pageEls[nextIndex].classList.add('active');
+      currentPageIndex = nextIndex;
+      scheduleNext();
+    }, PAGE_DURATION_MS);
+  }
+
+  function loadAndRender() {
+    fetchData()
+      .then(function (data) {
+        var dataString = JSON.stringify(data);
+        if (dataString === lastDataString) {
+          // データに変化がなければ再描画しない(アニメーションを継続)
+          return;
+        }
+        lastDataString = dataString;
+        render(data);
+      })
+      .catch(function (err) {
+        console.error('[overlay] Failed to load data.json:', err);
+        // 画面はクリーンなまま(エラー表示なし)
+      });
+  }
+
+  // 初回読み込み
+  loadAndRender();
+
+  // 定期的にdata.jsonをポーリング
+  setInterval(loadAndRender, POLL_INTERVAL_MS);
+})();
+</script>
+</body>
+</html>
