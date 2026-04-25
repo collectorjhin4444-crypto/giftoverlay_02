@@ -1,74 +1,282 @@
-# Gift Overlay for TikTok Live Studio
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Gift Overlay</title>
+<style>
+  @font-face {
+    font-family: 'Noto Sans JP Local';
+    src: url('fonts/NotoSansJP-Black.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+    font-display: block;
+  }
 
-TikTok Live Studio用のギフト紹介オーバーレイです。1080×1920の縦画面に、画像・ギフト名・任意テキストのセットを最大6個ずつ表示し、7個以上ある場合は2秒ごとにページを切り替えてループ表示します。
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-## ファイル構成
+  html, body {
+    width: 1080px;
+    height: 1920px;
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Noto Sans JP Local', 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+  }
 
-```
-/
-├ overlay.html      TikTok Live Studioで読み込むオーバーレイ
-├ admin.html        編集用ページ(プレビュー付き)
-├ data.json         セットデータ
-├ images/           webp画像置き場
-│  ├ rose.webp
-│  ├ cat-paw.webp
-│  └ baseball.webp
-├ fonts/            フォント置き場
-│  ├ NotoSansJP-Black.ttf  (オーバーレイで使用する極太フォント)
-│  └ NotoSansJP-Bold.ttf   (予備、現状未使用)
-└ README.md
-```
+  /* フォント読み込み完了まで非表示 */
+  body {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  body.ready {
+    opacity: 1;
+  }
 
-## セットアップ
+  #stage {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+  }
 
-1. このリポジトリをGitHubにアップロード
-2. リポジトリ設定で **GitHub Pages** を有効化(Settings → Pages → Source: `main` branch)
-3. 公開URLを確認(例: `https://yourname.github.io/your-repo/`)
+  .page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1080px;
+    height: 1920px;
+    padding: 60px 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+  }
 
-## 使い方
+  .page.active {
+    opacity: 1;
+  }
 
-### 編集 (admin.html)
+  .set {
+    height: 280px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    flex-shrink: 0;
+  }
 
-1. ローカルのブラウザで `admin.html` を開く(またはGitHub PagesのURL `/admin.html` を開く)
-2. 「📂 JSON読み込み」で既存の `data.json` をインポート
-3. セットの追加・削除・並び替え(↑↓ボタン)・編集
-4. 右側のプレビューで実際の見た目を確認
-5. 「💾 data.json ダウンロード」でファイルを保存
-6. ダウンロードした `data.json` をリポジトリに上書き
-7. 画像を追加した場合は `images/` フォルダにも追加
-8. `git add`, `git commit`, `git push` でGitHubに反映
+  .set-image-wrap {
+    width: 240px;
+    height: 240px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+    animation: rock 1s ease-in-out infinite alternate;
+  }
 
-### TikTok Live Studio
+  .set-image-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
 
-1. ブラウザソースを追加
-2. URL: `https://yourname.github.io/your-repo/overlay.html`
-3. 解像度: **幅 1080 × 高さ 1920**
-4. カスタムCSS: 不要(背景は最初から透明)
+  @keyframes rock {
+    from { transform: rotate(-10deg); }
+    to   { transform: rotate(10deg); }
+  }
 
-## セットの内容
+  .set-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+    overflow: hidden;
+  }
 
-各セットは以下の3つの項目を持ちます:
+  .set-name,
+  .set-desc {
+    color: #ffffff;
+    font-size: 72px;
+    line-height: 1.15;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
 
-```json
-{
-  "image": "images/rose.webp",
-  "name": "ローズ",
-  "text": "ありがとう!"
-}
-```
+    /* 黒縁取り(stroke) + 落ち影(shadow)の二重 */
+    -webkit-text-stroke: 6px #000000;
+    paint-order: stroke fill;
+    text-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.85),
+      0 0 6px rgba(0, 0, 0, 0.6);
+  }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
 
-- **image**: 画像のパス(リポジトリのルートからの相対パス)。168×168の透過webpを推奨
-- **name**: ギフト名(画像の右側、上に表示)
-- **text**: 任意テキスト(画像の右側、下に表示)
+<script>
+(function () {
+  'use strict';
 
-## 動作仕様
+  var SETS_PER_PAGE = 6;
+  var PAGE_DURATION_MS = 2000;     // 各ページ表示時間
+  var DISSOLVE_MS = 500;           // クロスフェード時間
+  var POLL_INTERVAL_MS = 30000;    // data.json再取得間隔(変更があればリロード)
 
-- 1ページに最大6セットを縦に並べて表示
-- 7個以上ある場合は2秒ごとに次のページにクロスフェード(0.5秒)で切替
-- 最後のページの後は1ページ目に戻ってループ
-- セットが6個以下の場合は1ページのみ表示し続ける(切替なし)
-- セットが0個の場合は何も表示しない
-- 画像は左右に±10°ゆっくり揺れるアニメーション
-- テキストは白文字に黒い縁取り、極太のNoto Sans JP Black
-- フォント読み込み完了まで全体非表示(チラつき防止)
-- `data.json` を30秒ごとにポーリングするので、push後しばらく待てば自動反映(リロード不要)
+  var stage = document.getElementById('stage');
+  var pageEls = [];
+  var currentPageIndex = 0;
+  var rotateTimer = null;
+  var lastDataString = null;
+
+  // フォント読み込み完了でbodyを表示
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      document.body.classList.add('ready');
+    });
+  } else {
+    // フォールバック
+    window.addEventListener('load', function () {
+      document.body.classList.add('ready');
+    });
+  }
+
+  function fetchData() {
+    // キャッシュバスティングしてdata.jsonを取得
+    var url = 'data.json?t=' + Date.now();
+    return fetch(url, { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      });
+  }
+
+  function chunk(arr, size) {
+    var pages = [];
+    for (var i = 0; i < arr.length; i += size) {
+      pages.push(arr.slice(i, i + size));
+    }
+    return pages;
+  }
+
+  function createSetEl(set) {
+    var setEl = document.createElement('div');
+    setEl.className = 'set';
+
+    var imgWrap = document.createElement('div');
+    imgWrap.className = 'set-image-wrap';
+
+    var img = document.createElement('img');
+    img.src = set.image || '';
+    img.alt = '';
+    img.onerror = function () {
+      // 画像読み込み失敗時はコンソールにログ、画面はクリーンに
+      console.error('[overlay] Image load failed:', set.image);
+      img.style.visibility = 'hidden';
+    };
+    imgWrap.appendChild(img);
+
+    var textWrap = document.createElement('div');
+    textWrap.className = 'set-text';
+
+    var nameEl = document.createElement('div');
+    nameEl.className = 'set-name';
+    nameEl.textContent = set.name || '';
+
+    var descEl = document.createElement('div');
+    descEl.className = 'set-desc';
+    descEl.textContent = set.text || '';
+
+    textWrap.appendChild(nameEl);
+    textWrap.appendChild(descEl);
+
+    setEl.appendChild(imgWrap);
+    setEl.appendChild(textWrap);
+
+    return setEl;
+  }
+
+  function render(data) {
+    // 既存のタイマーを停止
+    if (rotateTimer !== null) {
+      clearTimeout(rotateTimer);
+      rotateTimer = null;
+    }
+
+    // ステージをクリア
+    stage.innerHTML = '';
+    pageEls = [];
+    currentPageIndex = 0;
+
+    if (!data || !Array.isArray(data.sets) || data.sets.length === 0) {
+      // セット0個 → 何も表示しない
+      return;
+    }
+
+    var pages = chunk(data.sets, SETS_PER_PAGE);
+
+    // 各ページのDOMを構築
+    pages.forEach(function (pageSets, idx) {
+      var pageEl = document.createElement('div');
+      pageEl.className = 'page';
+      pageSets.forEach(function (s) {
+        pageEl.appendChild(createSetEl(s));
+      });
+      stage.appendChild(pageEl);
+      pageEls.push(pageEl);
+    });
+
+    // 1ページ目を表示
+    pageEls[0].classList.add('active');
+
+    // ページが2枚以上ある場合のみローテーション開始
+    if (pageEls.length >= 2) {
+      scheduleNext();
+    }
+  }
+
+  function scheduleNext() {
+    rotateTimer = setTimeout(function () {
+      var nextIndex = (currentPageIndex + 1) % pageEls.length;
+      pageEls[currentPageIndex].classList.remove('active');
+      pageEls[nextIndex].classList.add('active');
+      currentPageIndex = nextIndex;
+      scheduleNext();
+    }, PAGE_DURATION_MS);
+  }
+
+  function loadAndRender() {
+    fetchData()
+      .then(function (data) {
+        var dataString = JSON.stringify(data);
+        if (dataString === lastDataString) {
+          // データに変化がなければ再描画しない(アニメーションを継続)
+          return;
+        }
+        lastDataString = dataString;
+        render(data);
+      })
+      .catch(function (err) {
+        console.error('[overlay] Failed to load data.json:', err);
+        // 画面はクリーンなまま(エラー表示なし)
+      });
+  }
+
+  // 初回読み込み
+  loadAndRender();
+
+  // 定期的にdata.jsonをポーリング
+  setInterval(loadAndRender, POLL_INTERVAL_MS);
+})();
+</script>
+</body>
+</html>
