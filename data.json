@@ -26,9 +26,119 @@
       "text": "赤いきつね"
     },
     {
-      "image": "images/スパーGG.webp",
-      "name": "",
-      "text": "ｲﾝﾊﾟｸﾄﾌﾗｯｼｭ"
+      "image": "images/素晴らしい.webp",
+      "name": "お値段以上",
+      "text": ""
+    },
+    {
+      "image": "images/ニャオ.webp",
+      "name": "博多の塩",
+      "text": ""
+    },
+    {
+      "image": "images/ウインク.webp",
+      "name": "ﾊﾟﾌﾞﾛｰﾝｴｰｽAX",
+      "text": ""
+    },
+    {
+      "image": "images/香水.webp",
+      "name": "ファミマ入店",
+      "text": ""
+    },
+    {
+      "image": "images/びっくりした魚.webp",
+      "name": "うおｗ",
+      "text": ""
+    },
+    {
+      "image": "images/TikTok.webp",
+      "name": "コイン",
+      "text": ""
+    },
+    {
+      "image": "images/ポップ.webp",
+      "name": "ファイアボール",
+      "text": ""
+    },
+    {
+      "image": "images/ラブレター.webp",
+      "name": "そうだよ",
+      "text": ""
+    },
+    {
+      "image": "images/本気.webp",
+      "name": "やりますねぇ",
+      "text": ""
+    },
+    {
+      "image": "images/フリースタイル.webp",
+      "name": "デデドン",
+      "text": ""
+    },
+    {
+      "image": "images/名前の呼びかけ.webp",
+      "name": "お静かに",
+      "text": ""
+    },
+    {
+      "image": "images/フィンガーハート.webp",
+      "name": "ひとゴミ",
+      "text": ""
+    },
+    {
+      "image": "images/ローザ.webp",
+      "name": "お風呂が沸く",
+      "text": ""
+    },
+    {
+      "image": "images/オーバーなリアクション.webp",
+      "name": "ヤッフー",
+      "text": ""
+    },
+    {
+      "image": "images/おまもり.webp",
+      "name": "１ＵＰ",
+      "text": ""
+    },
+    {
+      "image": "images/大好き.webp",
+      "name": "カワイイ",
+      "text": ""
+    },
+    {
+      "image": "images/ジャーニーパス.webp",
+      "name": "勉強して",
+      "text": ""
+    },
+    {
+      "image": "images/友情ネックレス.webp",
+      "name": "レバーオン",
+      "text": ""
+    },
+    {
+      "image": "images/ねば〜る君.webp",
+      "name": "ガコン",
+      "text": ""
+    },
+    {
+      "image": "images/ふっかちゃん.webp",
+      "name": "先ばれ",
+      "text": ""
+    },
+    {
+      "image": "images/アイスバー.webp",
+      "name": "ＧＯＤ",
+      "text": ""
+    },
+    {
+      "image": "images/うどん脳.webp",
+      "name": "レゲエホーン",
+      "text": ""
+    },
+    {
+      "image": "images/クラッカー.webp",
+      "name": "ｱｸｾﾗﾚｰﾀﾎﾞｰﾅｽ",
+      "text": ""
     },
     {
       "image": "images/ゲームコントローラー.webp",
@@ -36,9 +146,9 @@
       "text": "シンフォギア"
     },
     {
-      "image": "images/クラッカー.webp",
-      "name": "ｱｸｾﾗﾚｰﾀﾎﾞｰﾅｽ",
-      "text": ""
+      "image": "images/スパーGG.webp",
+      "name": "",
+      "text": "ｲﾝﾊﾟｸﾄﾌﾗｯｼｭ"
     }
   ]
 }
