@@ -52,6 +52,63 @@
     flex-wrap: wrap;
   }
 
+  /* タブUI */
+  .tabs {
+    background: var(--panel);
+    padding: 0 32px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 4px;
+  }
+
+  .tab-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 14px 24px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tab-btn:hover {
+    color: var(--ink);
+  }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .tab-count {
+    font-size: 11px;
+    background: var(--line);
+    color: var(--ink-soft);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+  }
+
+  .tab-btn.active .tab-count {
+    background: var(--accent);
+    color: #fff;
+  }
+
   header h1 {
     margin: 0;
     font-size: 20px;
@@ -400,8 +457,21 @@
 
 <header>
   <h1>🎁 Gift Overlay Admin</h1>
-  <span class="sub">セットの追加・編集・並び替え → JSON書き出し → リポジトリにpush</span>
+  <span class="sub">左寄せ版・右寄せ版それぞれを編集 → JSON書き出し → リポジトリにpush</span>
 </header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="left">
+    <svg class="tab-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="10" r="3"/><line x1="11" y1="8" x2="17" y2="8"/><line x1="11" y1="12" x2="15" y2="12"/></svg>
+    左寄せ版 (data.json)
+    <span class="tab-count" id="tab-count-left">0</span>
+  </button>
+  <button class="tab-btn" data-tab="right">
+    <svg class="tab-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="14" cy="10" r="3"/><line x1="3" y1="8" x2="9" y2="8"/><line x1="5" y1="12" x2="9" y2="12"/></svg>
+    右寄せ版 (data-right.json)
+    <span class="tab-count" id="tab-count-right">0</span>
+  </button>
+</div>
 
 <div class="layout">
 
@@ -420,12 +490,16 @@
 
     <div class="help">
       <strong>使い方:</strong><br>
-      1. 「＋ セット追加」で新規セット追加、または「📂 JSON読み込み」で既存data.jsonを編集再開<br>
-      2. 各セットのサムネイル枠に画像ファイルを<strong>ドラッグ&ドロップ</strong>(またはクリックで選択)。同名ファイルがダウンロードされ、画像パスが自動入力される<br>
-      3. ギフト名・任意テキストを入力、必要に応じて↑↓ボタンで並び替え<br>
-      4. 「💾 data.json ダウンロード」でファイル保存<br>
-      5. ダウンロードした <code>data.json</code> をリポジトリのルートに、画像ファイルを <code>images/</code> フォルダに配置してcommit/push<br>
-      6. GitHub Pagesに反映後、TikTok Live Studioで <code>overlay.html</code> を読み込む(ブラウザソースサイズはお好みで調整)
+      <strong>左寄せ版</strong>と<strong>右寄せ版</strong>のタブを切り替えて、それぞれ独立して編集できます。<br>
+      1. タブを選択(左寄せ版 or 右寄せ版)<br>
+      2. 「＋ セット追加」で新規追加、または「📂 JSON読み込み」で既存ファイルから編集再開<br>
+      3. 各セットのサムネイル枠に画像を<strong>ドラッグ&ドロップ</strong>(またはクリックで選択)<br>
+      4. ギフト名・任意テキストを入力、必要なら↑↓で並び替え<br>
+      5. 「💾 JSON ダウンロード」でファイル保存(ファイル名は自動でタブに対応: <code>data.json</code> または <code>data-right.json</code>)<br>
+      6. 画像をリポジトリの <code>images/</code> に、JSONをリポジトリのルートに配置してcommit/push<br>
+      7. TikTok Live Studioで読み込み:<br>
+       ・左寄せ版: <code>https://yourname.github.io/your-repo/overlay.html</code><br>
+       ・右寄せ版: <code>https://yourname.github.io/your-repo/overlay.html?align=right</code>
     </div>
   </div>
 
@@ -447,11 +521,25 @@
   'use strict';
 
   // === 状態 ===
+  // 左右タブそれぞれが独立した編集状態を持つ
+  function newTabState() {
+    return {
+      sets: [],
+      // インデックスごとのBase64プレビュー(ドロップされた画像のメモリ内データ。JSONには書き出さない)
+      localPreviews: {}
+    };
+  }
+
   var state = {
-    sets: [],
-    // インデックスごとのBase64プレビュー(ドロップされた画像のメモリ内データ。JSONには書き出さない)
-    localPreviews: {}
+    activeTab: 'left',  // 'left' | 'right'
+    left: newTabState(),
+    right: newTabState()
   };
+
+  // 現在のタブの状態を返すヘルパー
+  function activeState() {
+    return state[state.activeTab];
+  }
 
   var listEl = document.getElementById('sets-list');
   var iframe = document.getElementById('preview-iframe');
@@ -469,17 +557,35 @@
       .replace(/"/g, '&quot;');
   }
 
+  function updateTabCounts() {
+    document.getElementById('tab-count-left').textContent = state.left.sets.length;
+    document.getElementById('tab-count-right').textContent = state.right.sets.length;
+  }
+
+  function updateDownloadLabel() {
+    var btn = document.getElementById('btn-download');
+    var fileName = state.activeTab === 'right' ? 'data-right.json' : 'data.json';
+    btn.textContent = '💾 ' + fileName + ' ダウンロード';
+  }
+
   function renderList() {
-    if (!state.sets.length) {
-      listEl.innerHTML = '<div class="empty-state">まだセットがありません。「＋ セット追加」または「📂 JSON読み込み」から始めてください。</div>';
+    var st = activeState();
+    updateTabCounts();
+    updateDownloadLabel();
+
+    if (!st.sets.length) {
+      var emptyMsg = state.activeTab === 'left'
+        ? '左寄せ版のセットがまだありません。「＋ セット追加」または「📂 JSON読み込み」から始めてください。'
+        : '右寄せ版のセットがまだありません。「＋ セット追加」または「📂 JSON読み込み」から始めてください。';
+      listEl.innerHTML = '<div class="empty-state">' + emptyMsg + '</div>';
       schedulePreviewUpdate();
       return;
     }
 
-    var html = state.sets.map(function (s, i) {
+    var html = st.sets.map(function (s, i) {
       var imgPath = s.image || '';
       // ローカルでドロップされた画像のBase64がある場合はそちらを優先表示
-      var displaySrc = state.localPreviews[i] || imgPath;
+      var displaySrc = st.localPreviews[i] || imgPath;
       var imgPreview = displaySrc
         ? '<img src="' + escapeHtml(displaySrc) + '" alt="" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';"><span class="placeholder" style="display:none;">画像が<br>見つかりません</span>'
         : '<span class="placeholder">画像をドロップ<br>またはパス入力</span>';
@@ -509,7 +615,7 @@
           '</div>' +
           '<div class="actions">' +
             '<button class="btn icon" data-action="up" title="上へ移動"' + (i === 0 ? ' disabled style="opacity:0.3;cursor:not-allowed;"' : '') + '>↑</button>' +
-            '<button class="btn icon" data-action="down" title="下へ移動"' + (i === state.sets.length - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;"' : '') + '>↓</button>' +
+            '<button class="btn icon" data-action="down" title="下へ移動"' + (i === st.sets.length - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;"' : '') + '>↓</button>' +
             '<button class="btn icon danger" data-action="delete" title="削除">✕</button>' +
           '</div>' +
         '</div>';
@@ -521,45 +627,49 @@
 
   // === 操作 ===
   function addSet() {
-    state.sets.push({ image: '', name: '', text: '' });
+    var st = activeState();
+    st.sets.push({ image: '', name: '', text: '' });
     renderList();
   }
 
   function deleteSet(index) {
     if (!confirm('このセットを削除しますか?')) return;
-    state.sets.splice(index, 1);
+    var st = activeState();
+    st.sets.splice(index, 1);
     // localPreviews を index ベースで再構築(削除した index 以降を1つずつ前にずらす)
     var newPreviews = {};
-    Object.keys(state.localPreviews).forEach(function (k) {
+    Object.keys(st.localPreviews).forEach(function (k) {
       var i = parseInt(k, 10);
-      if (i < index) newPreviews[i] = state.localPreviews[i];
-      else if (i > index) newPreviews[i - 1] = state.localPreviews[i];
+      if (i < index) newPreviews[i] = st.localPreviews[i];
+      else if (i > index) newPreviews[i - 1] = st.localPreviews[i];
     });
-    state.localPreviews = newPreviews;
+    st.localPreviews = newPreviews;
     renderList();
   }
 
   function moveSet(index, dir) {
+    var st = activeState();
     var newIndex = index + dir;
-    if (newIndex < 0 || newIndex >= state.sets.length) return;
-    var tmp = state.sets[index];
-    state.sets[index] = state.sets[newIndex];
-    state.sets[newIndex] = tmp;
+    if (newIndex < 0 || newIndex >= st.sets.length) return;
+    var tmp = st.sets[index];
+    st.sets[index] = st.sets[newIndex];
+    st.sets[newIndex] = tmp;
     // localPreviews も swap
-    var p1 = state.localPreviews[index];
-    var p2 = state.localPreviews[newIndex];
-    if (p1 !== undefined) state.localPreviews[newIndex] = p1; else delete state.localPreviews[newIndex];
-    if (p2 !== undefined) state.localPreviews[index] = p2; else delete state.localPreviews[index];
+    var p1 = st.localPreviews[index];
+    var p2 = st.localPreviews[newIndex];
+    if (p1 !== undefined) st.localPreviews[newIndex] = p1; else delete st.localPreviews[newIndex];
+    if (p2 !== undefined) st.localPreviews[index] = p2; else delete st.localPreviews[index];
     renderList();
   }
 
   function updateField(index, field, value) {
-    if (!state.sets[index]) return;
-    state.sets[index][field] = value;
+    var st = activeState();
+    if (!st.sets[index]) return;
+    st.sets[index][field] = value;
 
     // 画像パスがマニュアル変更されたら、対応するlocalPreviewはクリア(本物のパスを優先)
-    if (field === 'image' && state.localPreviews[index]) {
-      delete state.localPreviews[index];
+    if (field === 'image' && st.localPreviews[index]) {
+      delete st.localPreviews[index];
     }
 
     schedulePreviewUpdate();
@@ -570,8 +680,7 @@
       if (card) {
         var preview = card.querySelector('.img-preview');
         if (preview) {
-          var displaySrc = state.localPreviews[index] || value;
-          var hint = preview.querySelector('.drop-hint');
+          var displaySrc = st.localPreviews[index] || value;
           // drop-hint以外を再構築
           preview.innerHTML = '';
           if (displaySrc) {
@@ -626,6 +735,7 @@
       return;
     }
 
+    var st = activeState();
     var fileName = file.name;
     var imagePath = 'images/' + fileName;
 
@@ -633,9 +743,9 @@
     var reader = new FileReader();
     reader.onload = function (e) {
       var dataUrl = e.target.result;
-      state.localPreviews[index] = dataUrl;
+      st.localPreviews[index] = dataUrl;
       // パスも自動入力
-      state.sets[index].image = imagePath;
+      st.sets[index].image = imagePath;
 
       // ファイルをユーザーのダウンロードフォルダに保存(リポジトリ配置用)
       saveFileToDownload(file, fileName);
@@ -658,6 +768,20 @@
   }
 
   // === イベント ===
+  // === タブ切替 ===
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tab = btn.dataset.tab;
+      if (tab === state.activeTab) return;
+      state.activeTab = tab;
+      // ボタンのアクティブ状態を更新
+      document.querySelectorAll('.tab-btn').forEach(function (b) {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
+      renderList();
+    });
+  });
+
   document.getElementById('btn-add').addEventListener('click', addSet);
 
   document.getElementById('btn-load').addEventListener('click', function () {
@@ -675,15 +799,17 @@
           alert('不正なJSONです。{ "sets": [...] } の形式が必要です。');
           return;
         }
-        state.sets = data.sets.map(function (s) {
+        var st = activeState();
+        st.sets = data.sets.map(function (s) {
           return {
             image: s.image || '',
             name: s.name || '',
             text: s.text || ''
           };
         });
-        state.localPreviews = {};
+        st.localPreviews = {};
         renderList();
+        showToast((state.activeTab === 'left' ? '左寄せ版' : '右寄せ版') + 'のセットを読み込みました', 2500);
       } catch (err) {
         alert('JSONの読み込みに失敗しました: ' + err.message);
       }
@@ -693,17 +819,20 @@
   });
 
   document.getElementById('btn-download').addEventListener('click', function () {
-    var data = { sets: state.sets };
+    var st = activeState();
+    var data = { sets: st.sets };
     var json = JSON.stringify(data, null, 2);
     var blob = new Blob([json], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'data.json';
+    // 現在のタブに応じてファイル名を変える
+    a.download = state.activeTab === 'right' ? 'data-right.json' : 'data.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    showToast(a.download + ' をダウンロードしました', 2500);
   });
 
   // セットカード内のイベント(委譲)
@@ -791,9 +920,10 @@
   }
 
   function buildPreviewHTML() {
+    var activeState = state[state.activeTab];
     // localPreviewsがあるセットは、画像パスを一時的にBase64データに置き換えてプレビュー表示
-    var previewSets = state.sets.map(function (s, i) {
-      var previewSrc = state.localPreviews[i];
+    var previewSets = activeState.sets.map(function (s, i) {
+      var previewSrc = activeState.localPreviews[i];
       return {
         image: previewSrc || s.image || '',
         name: s.name || '',
@@ -801,6 +931,7 @@
       };
     });
     var dataJson = JSON.stringify({ sets: previewSets });
+    var bodyClass = state.activeTab === 'right' ? 'align-right' : '';
     return '<!DOCTYPE html>\n' +
 '<html lang="ja">\n' +
 '<head>\n' +
@@ -813,14 +944,16 @@
 '.page{position:absolute;top:0;left:0;width:1920px;height:1920px;padding:60px;display:flex;flex-direction:column;gap:14px;opacity:0;transition:opacity .5s ease}\n' +
 '.page.active{opacity:1}\n' +
 '.set{height:280px;display:flex;align-items:center;gap:32px;flex-shrink:0}\n' +
+'body.align-right .set{flex-direction:row-reverse}\n' +
+'body.align-right .set-text{align-items:flex-end;text-align:right}\n' +
 '.set-image-wrap{width:240px;height:240px;flex-shrink:0;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 6px 10px rgba(0,0,0,.55));animation:rock 1s ease-in-out infinite alternate}\n' +
 '.set-image-wrap img{width:100%;height:100%;object-fit:contain;display:block}\n' +
 '@keyframes rock{from{transform:rotate(-10deg)}to{transform:rotate(10deg)}}\n' +
 '.set-text{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:12px;overflow:hidden}\n' +
-'.set-name,.set-desc{color:#fff;font-size:72px;line-height:1.15;font-weight:900;white-space:nowrap;overflow:hidden;-webkit-text-stroke:12px #000;paint-order:stroke fill;text-shadow:0 4px 8px rgba(0,0,0,.85),0 0 6px rgba(0,0,0,.6)}\n' +
+'.set-name,.set-desc{color:#fff;font-size:72px;line-height:1.15;font-weight:900;white-space:nowrap;overflow:hidden;-webkit-text-stroke:30px #000;paint-order:stroke fill;text-shadow:0 12px 20px rgba(0,0,0,.85),0 0 12px rgba(0,0,0,.6)}\n' +
 '.set.solo .set-name,.set.solo .set-desc{font-size:144px}\n' +
 '.set.solo .set-name:empty,.set.solo .set-desc:empty{display:none}\n' +
-'</style></head><body>\n' +
+'</style></head><body class="' + bodyClass + '">\n' +
 '<div id="stage"></div>\n' +
 '<script>\n' +
 '(function(){\n' +
@@ -862,16 +995,16 @@
     iframe.srcdoc = html;
   }
 
-  // === 起動時に data.json があれば自動読み込み ===
-  function autoLoad() {
-    fetch('data.json?t=' + Date.now(), { cache: 'no-store' })
+  // === 起動時に data.json と data-right.json があれば自動読み込み ===
+  function autoLoadOne(file, target) {
+    return fetch(file + '?t=' + Date.now(), { cache: 'no-store' })
       .then(function (res) {
         if (!res.ok) throw new Error('not found');
         return res.json();
       })
       .then(function (data) {
         if (data && Array.isArray(data.sets)) {
-          state.sets = data.sets.map(function (s) {
+          target.sets = data.sets.map(function (s) {
             return {
               image: s.image || '',
               name: s.name || '',
@@ -879,12 +1012,19 @@
             };
           });
         }
-        renderList();
       })
       .catch(function () {
-        // 見つからない場合は空のまま起動
-        renderList();
+        // ファイルがなければ空のまま
       });
+  }
+
+  function autoLoad() {
+    Promise.all([
+      autoLoadOne('data.json', state.left),
+      autoLoadOne('data-right.json', state.right)
+    ]).then(function () {
+      renderList();
+    });
   }
 
   autoLoad();
